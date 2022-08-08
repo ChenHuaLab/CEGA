@@ -70,6 +70,7 @@ char *afs_file;
 int thread_num;
 int optimize_type;
 int win_size;
+int step_size;
 char *win_size_file;
 char *win_size_file_for_global;
 char *out_file;

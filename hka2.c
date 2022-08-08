@@ -3,6 +3,7 @@
 #define MIN_POISSON_LAMBDA 1e-50
 #define MIN_POISSON_PROP 1e-4
 
+int min_for_filter_window=0;
 double func_mu=2.5e-8;
 double max_mu=10.0;
 double max_lambda=100.0;
@@ -90,20 +91,18 @@ int main(int argc, char **argv){
     }
 
     AList_i *to_cul_s2s_index=new_alist_i(16);
-    int is_input_global_L=global_L==0.0 ? 0:1;
     for(i=0;i<all_s2s_wins->size;i++){
-        Win1 *win=all_s2s_wins->elementData[i];
+        S2 *s2=all_s2s->elementData[i];
+        double tmp=s2->s1+s2->s2+s2->s12+s2->D;
+        if(tmp<(double)min_for_filter_window) continue;
+        //--
         alist_i_add(to_cul_s2s_index, i);
-        if(!is_input_global_L){
-            global_L+=win->length==0 ? (win->end-win->start):(win->length);
-        }
     }
-    if(win_size_file_for_global){
-        global_L=0.0;
-        for(i=0;i<all_s2s_wins_global->size;i++){
-            Win1 *win=all_s2s_wins_global->elementData[i];
-            global_L+=win->length==0 ? (win->end-win->start):(win->length);
-        }
+
+    global_L=0.0;
+    for(i=0;i<all_s2s_wins_global->size;i++){
+        Win1 *win=all_s2s_wins_global->elementData[i];
+        global_L+=win->length==0 ? (win->end-win->start+1):(win->length);
     }
 
     mylog("estimating global parameters(N0, N1, N2, T)...");
@@ -121,7 +120,7 @@ int main(int argc, char **argv){
     fprintf(stdout, "initial: N1=%d\tlow=%d\tup=%d\n", (int)x[1], (int)low[1], (int)up[1]);
     fprintf(stdout, "initial: N2=%d\tlow=%d\tup=%d\n", (int)x[2], (int)low[2], (int)up[2]);
     fprintf(stdout, "initial:  T=%d\tlow=%d\tup=%d\n", (int)x[3], (int)low[3], (int)up[3]);
-    fprintf(stdout, "win_size=%d\tglobal_size=%d\n", win_size, (int)global_L);
+    //fprintf(stdout, "win_size=%d\tglobal_size=%d\n", win_size, (int)global_L);
     optimize_type=1;
     if(optimize_type==0) findmax_bfgs(npara, x, NULL, log_likelihood_func, NULL, low, up, nbd, 0);
     else if(optimize_type==1) kmin_hj2(npara, x, NULL, log_likelihood_func, low, up);
@@ -165,35 +164,6 @@ int main(int argc, char **argv){
     thread_pool_invoke_all(pool);
 
     double lambda1_avg=0.0, lambda1_var=0.0, lambda2_avg=0.0, lambda2_var=0.0;
-    for(i=0;i<all_s2s_wins->size;i++){
-        lambda1_avg+=log(res_2_lambda1[i]);
-        lambda2_avg+=log(res_2_lambda2[i]);
-    }
-    lambda1_avg/=(double)all_s2s_wins->size;
-    lambda2_avg/=(double)all_s2s_wins->size;
-    for(i=0;i<all_s2s_wins->size;i++){
-        lambda1_var+=pow(log(res_2_lambda1[i])-lambda1_avg, 2.0);
-        lambda2_var+=pow(log(res_2_lambda2[i])-lambda2_avg, 2.0);
-    }
-    lambda1_var/=(double)all_s2s_wins->size;
-    lambda1_var=sqrt(lambda1_var);
-    lambda2_var/=(double)all_s2s_wins->size;
-    lambda2_var=sqrt(lambda2_var);
-
-    len=sprintf(loginfo, "log_lambda1_avg=%f\tlog_lambda1_var=%f\tlog_lambda2_avg=%f\tlog_lambda2_var=%f", lambda1_avg, lambda1_var, lambda2_avg, lambda2_var);mylog(loginfo);
-
-    mylog("writing results into file...");
-    GzStream *out=gz_stream_open(out_file, "w");
-    gz_write(out, loginfo, len);gz_write_char(out, '\n');
-    len=sprintf(loginfo, "estimate:\tN0=%f\tN1=%f\tN2=%f\tT=%f\tlike=%f\n", x[0], x[1], x[2], x[3], like1);
-    gz_write(out, loginfo, len);
-    if(is_output_true){
-        len=sprintf(loginfo, "true:    \tN0=%f\tN1=%f\tN2=%f\tT=%f\tlike=%f\n", xx[0], xx[1], xx[2], xx[3], like2);
-        gz_write(out, loginfo, len);
-    }
-    len=sprintf(loginfo, "global:s1=%d/%.2f\ts2=%d/%.2f\ts12=%d/[%.2f,%.2f,%.2f]\tD=%d/[%.2f,%.2f,%.2f]\n", (int)(global_s2->s1), global_s2->estimate_s1, (int)(global_s2->s2), global_s2->estimate_s2, (int)(global_s2->s12), global_s2->s12_1, global_s2->s12_2, global_s2->estimate_s12, (int)(global_s2->D), global_s2->D1, global_s2->D2, global_s2->estimate_D);
-    gz_write(out, loginfo, len);
-    //--
     AList_d *L1= new_alist_d(to_cul_s2s_index->size);
     AList_d *L2= new_alist_d(to_cul_s2s_index->size);
     AList_d *nlambda1= new_alist_d(to_cul_s2s_index->size);
@@ -207,17 +177,33 @@ int main(int argc, char **argv){
     }
     get_nlambda_and_P(L1, nlambda1, n_p1);
     get_nlambda_and_P(L2, nlambda2, n_p2);
+    avg_biased_var(L1->size, L1->elementData, &lambda1_avg, &lambda1_var);
+    avg_biased_var(L2->size, L2->elementData, &lambda2_avg, &lambda2_var);
+
+    len=sprintf(loginfo, "log_lambda1_avg=%f\tlog_lambda1_var=%f\tlog_lambda2_avg=%f\tlog_lambda2_var=%f", lambda1_avg, lambda1_var, lambda2_avg, lambda2_var);mylog(loginfo);
+
+    mylog("writing results into file...");
+    GzStream *out=gz_stream_open(out_file, "w");
+    //gz_write(out, loginfo, len);gz_write_char(out, '\n');
+    len=sprintf(loginfo, "Global parameters:\tN0=%f\tN1=%f\tN2=%f\tT=%f\n", x[0], x[1], x[2], x[3]);
+    gz_write(out, loginfo, len);
+    if(is_output_true){
+        len=sprintf(loginfo, "true:    \tN0=%f\tN1=%f\tN2=%f\tT=%f\tlike=%f\n", xx[0], xx[1], xx[2], xx[3], like2);
+        gz_write(out, loginfo, len);
+    }
+    //len=sprintf(loginfo, "global:s1=%d/%.2f\ts2=%d/%.2f\ts12=%d/[%.2f,%.2f,%.2f]\tD=%d/[%.2f,%.2f,%.2f]\n", (int)(global_s2->s1), global_s2->estimate_s1, (int)(global_s2->s2), global_s2->estimate_s2, (int)(global_s2->s12), global_s2->s12_1, global_s2->s12_2, global_s2->estimate_s12, (int)(global_s2->D), global_s2->D1, global_s2->D2, global_s2->estimate_D);
+    //gz_write(out, loginfo, len);
     //--
     for(i=0;i<to_cul_s2s_index->size;i++){
         int index=to_cul_s2s_index->elementData[i];
         Win1 *win=all_s2s_wins->elementData[index];
-        int length=win->length==0 ? (win->end-win->start):win->length;
+        int length=win->length==0 ? (win->end-win->start+1):win->length;
         S2 *s2=all_s2s->elementData[index];
         double span_like=res_1_like[index]-res_2_like[index];
         double p1=1.0-chi2_cdf(span_like*2.0, 1);
         double p2_1=norm_cdf(log(res_2_lambda1[index]), lambda1_avg, lambda1_var);
         double p2_2=norm_cdf(log(res_2_lambda2[index]), lambda2_avg, lambda2_var);
-        len=sprintf(loginfo, "%s:%d-%d\ts1=%d/%.2f\ts2=%d/%.2f\ts12=%d/[%.2f,%.2f,%.2f]\tD=%d/[%.2f,%.2f,%.2f]\tmu=%f\tlambda1=%f\tlambda2=%f\tnlambda1=%f\tp1=%f\tnlambda2=%f\tp2=%f\n", win->chr, win->start, win->end-1, (int)(s2->s1), s2->estimate_s1, (int)(s2->s2), s2->estimate_s2, (int)(s2->s12), s2->s12_1, s2->s12_2, s2->estimate_s12, (int)(s2->D), s2->D1, s2->D2, s2->estimate_D, res_2_mu[index]*func_mu*length, res_2_lambda1[index], res_2_lambda2[index], nlambda1->elementData[i], n_p1->elementData[i], nlambda2->elementData[i], n_p2->elementData[i]);
+        len=sprintf(loginfo, "%s:%d-%d\ts1=%d/%.2f\ts2=%d/%.2f\ts12=%d/%.2f\tD=%d/%.2f\tmu=%f\tlambda1=%f\tlambda2=%f\tnlambda1=%f\tp1=%e\tnlambda2=%f\tp2=%e\n", win->chr, win->start, win->end, (int)(s2->s1), s2->estimate_s1, (int)(s2->s2), s2->estimate_s2, (int)(s2->s12), s2->estimate_s12, (int)(s2->D), s2->estimate_D, res_2_mu[index]*func_mu*length, res_2_lambda1[index], res_2_lambda2[index], nlambda1->elementData[i], n_p1->elementData[i], nlambda2->elementData[i], n_p2->elementData[i]);
         gz_write(out, loginfo, len);
     }
     gz_stream_destory(out);
@@ -236,7 +222,7 @@ void load_parameters(int argc, char **argv){
     argc--;
     argv++;
 
-    if(argc<4 || argc%2==1) print_usage();
+    if(argc<4) print_usage();
 
     pop1_file=NULL;
     pos1_file=NULL;
@@ -244,9 +230,10 @@ void load_parameters(int argc, char **argv){
     pos2_file=NULL;
     afs_file=NULL;
     global_L=0.0;
-    thread_num=36;
+    thread_num=1;
     optimize_type=0;
     win_size=10000;
+	step_size=1000;
     win_size_file=NULL;
     win_size_file_for_global=NULL;
     out_file=NULL;
@@ -268,9 +255,12 @@ void load_parameters(int argc, char **argv){
         }else if(strcmp(argv[i], "-afs")==0){
             i++;
             afs_file=argv[i];
-        }else if(strcmp(argv[i], "-t")==0){
+        }else if(strcmp(argv[i], "-t")==0) {
             i++;
-            thread_num=atoi(argv[i]);
+            thread_num = atoi(argv[i]);
+        }else if(strcmp(argv[i], "-d")==0){
+            i++;
+            min_for_filter_window=atoi(argv[i]);
         }else if(strcmp(argv[i], "-N0")==0){
             i++;
             initial_N0=atof(argv[i]);
@@ -311,6 +301,8 @@ void load_parameters(int argc, char **argv){
         }else if(strcmp(argv[i], "-ws")==0){
             i++;
             win_size=atoi(argv[i]);
+			i++;
+			step_size=atoi(argv[i]);
         }else if(strcmp(argv[i], "-wf")==0){
             i++;
             win_size_file=argv[i];
@@ -382,13 +374,14 @@ void print_usage(){
     printf("    -N1         (double)initial lowbound upbound(defalut:10000.0 100.0 1000000.0)\n");
     printf("    -N2         (double)initial lowbound upbound(defalut:10000.0 100.0 1000000.0)\n");
     printf("    -T          (double)initial lowbound upbound(defalut:10000.0 100.0 1000000.0)\n");
-    printf("    -t          (int)thread number(default:36)\n");
+    printf("    -t          (int)thread number(default:1)\n");
+    printf("    -d          (int) filtering windows with s1+s2+s12+D < this value (default: 0)\n");
     //printf("    -L          (int)all_chrom_length.(only for -afs)\n");
     printf("    -mu         (double)mutation rate(default:2.5e-8)\n");
     printf("    -op         (int)0:bfgs, 1:kmin_hj(default:0)\n");
-    printf("    -ws         (int)window size(default:10000)\n");
-    printf("    -wf         (file)window file(format:chr start end length, split by tab), if input, '-ws' is disable(default:null)\n");
-    printf("    -wf_g       (file)window file for estimate global paras, format same to '-wf', if not input, all wins same to '-ws' or '-wf'(default:null)\n");
+    printf("    -ws         (int)window_size step_size(default: 10000 1000)\n");
+    printf("    -wf         (file)window file(format:chr start(1-base,include) end(1-base,include) length, split by tab), if input, '-ws' is disable(default:null)\n");
+    printf("    -wf_g       (file)window file for estimate global paras, format same to '-wf', if not input, one win for one entire chromosome(default:null)\n");
     printf("  output:\n");
     printf("    -o          output file\n\n");
     exit(0);
@@ -447,7 +440,7 @@ Win3 *read_win_size_file(char *file){
     }
     gz_stream_destory(gz1);
 
-    win_size=(int)(all_win_size/n_all_win_size);
+    if(file==win_size_file) win_size=(int)(all_win_size/n_all_win_size);
 
     return win3;
 }
@@ -495,10 +488,11 @@ AList_l *read_data(){
             for(j=0;j<win2->l_win;j++){
                 Win1 *win1=win2->wins[j];
                 alist_l_add(list, get_S2(flag1, flag2, win1->start, win1->end, data1->n_sample+1, data2->n_sample+1));
-                Win1 *tmp=my_new(1, sizeof(Win1));
+                Win1 *tmp= my_new(1, sizeof(Win1));
                 tmp->chr=all_wins->chrs[i];
                 tmp->start=win1->start;
                 tmp->end=win1->end;
+                tmp->length=win1->length;
                 alist_l_add(all_s2s_wins, tmp);
             }
             free(flag1);
@@ -517,19 +511,21 @@ AList_l *read_data(){
             int min_p1=pp1->pos[0];
             int min_p2=pp2->pos[0];
             int min_p=min_p1<min_p2 ? min_p1:min_p2;
-            int max_p1=pp1->pos[pp1->l_data-1]+1;
-            int max_p2=pp2->pos[pp2->l_data-1]+1;
+            int max_p1=pp1->pos[pp1->l_data-1];
+            int max_p2=pp2->pos[pp2->l_data-1];
             int max_p=max_p1>max_p2 ? max_p1:max_p2;
             int start, end;
-            for(start=min_p;start<max_p;start=end){
-                end=start+win_size;
+            for(start=min_p;start<=max_p;start+=step_size){
+                end=start+win_size-1;
                 if(end>max_p) end=max_p;
                 alist_l_add(list, get_S2(flag1, flag2, start, end, data1->n_sample+1, data2->n_sample+1));
                 Win1 *tmp=my_new(1, sizeof(Win1));
                 tmp->chr=data1->chrs[i];
                 tmp->start=start;
                 tmp->end=end;
+                tmp->length=end-start+1;
                 alist_l_add(all_s2s_wins, tmp);
+                if(end==max_p) break;
             }
             //--
             free(flag1);
@@ -537,11 +533,11 @@ AList_l *read_data(){
         }
     }
 
+    //-- for global
+    all_s2s_wins_global=new_alist_l(16);
+    all_s2s_global=new_alist_l(16);
+    memset(global_s2->arr, 0, global_s2->dim1*global_s2->dim2*sizeof(double));
     if(win_size_file_for_global){
-        all_s2s_wins_global=new_alist_l(16);
-        all_s2s_global=new_alist_l(16);
-        memset(global_s2->arr, 0, global_s2->dim1*global_s2->dim2*sizeof(double));
-
         for(i=0;i<all_wins_global->l_chr;i++){
             Win2 *win2=all_wins_global->data[i];
             Pop1 *pp1=get_pop1_by_chr(all_wins_global->chrs[i], data1);
@@ -554,18 +550,46 @@ AList_l *read_data(){
             for(j=0;j<win2->l_win;j++){
                 Win1 *win1=win2->wins[j];
                 alist_l_add(all_s2s_global, get_S2(flag1, flag2, win1->start, win1->end, data1->n_sample+1, data2->n_sample+1));
-                Win1 *tmp=my_new(1, sizeof(Win1));
+                Win1 *tmp= my_new(1, sizeof(Win1));
                 tmp->chr=all_wins_global->chrs[i];
                 tmp->start=win1->start;
                 tmp->end=win1->end;
+                tmp->length=win1->length;
                 alist_l_add(all_s2s_wins_global, tmp);
             }
             free(flag1);
             free(flag2);
         }
     }else{
-        all_s2s_wins_global=all_s2s_wins;
-        all_s2s_global=list;
+        for(i=0;i<data1->l_chr;i++){
+            Pop1 *pp1=data1->pops[i];
+            Pop1 *pp2=get_pop1_by_chr(data1->chrs[i], data2);
+            if(pp1==NULL || pp2==NULL) continue;
+            int *flag1=my_new(1000000000, sizeof(int));
+            int *flag2=my_new(1000000000, sizeof(int));
+            for(j=0;j<pp1->l_data;j++) flag1[pp1->pos[j]]=pp1->data[j];
+            for(j=0;j<pp2->l_data;j++) flag2[pp2->pos[j]]=pp2->data[j];
+            //--
+            int min_p1=pp1->pos[0];
+            int min_p2=pp2->pos[0];
+            int min_p=min_p1<min_p2 ? min_p1:min_p2;
+            int max_p1=pp1->pos[pp1->l_data-1];
+            int max_p2=pp2->pos[pp2->l_data-1];
+            int max_p=max_p1>max_p2 ? max_p1:max_p2;
+            int start=min_p;
+            int end=max_p;
+            //--
+            alist_l_add(all_s2s_global, get_S2(flag1, flag2, start, end, data1->n_sample+1, data2->n_sample+1));
+            Win1 *tmp=my_new(1, sizeof(Win1));
+            tmp->chr=data1->chrs[i];
+            tmp->start=start;
+            tmp->end=end;
+            tmp->length=end-start+1;
+            alist_l_add(all_s2s_wins_global, tmp);
+            //--
+            free(flag1);
+            free(flag2);
+        }
     }
 
     complete_S2(global_s2);
@@ -592,7 +616,7 @@ S2 *get_S2(int *flag1, int *flag2, int start, int end, int dim1, int dim2){
     s2->arr=my_new(dim1*dim2, sizeof(double));
 
     int pos;
-    for(pos=start;pos<end;pos++){
+    for(pos=start;pos<=end;pos++){
         int n1=flag1[pos];
         int n2=flag2[pos];
         if(n1>=dim1 || n2>=dim2){
@@ -667,7 +691,7 @@ Pop2 *read_hap_file(char *hap_file, char *pos_file){
         int num=0, missing_num=0;
         for(i=0;i<row;i++){
             char c=arr[i*col+j];
-            if(c=='.' || c=='?' || c=='-') missing_num++;
+            if(c!='0' && c!='1') missing_num++;
             else if(c=='1') num++;
         }
         if(num>0 && (num+missing_num)==row) num=row;
@@ -742,7 +766,7 @@ Pop2 *read_tped_file(char *tped_file){
         int num=0, missing_num=0;
         for(i=4;i<n_tabs;i++){
             char *str=line+tabs[i-1]+1;
-            if(str[0]=='.' || str[0]=='?' || str[0]=='-') missing_num++;
+            if(str[0]!='0' && str[0]!='1') missing_num++;
             else if(str[0]=='1') num++;
         }
         if(num>0 && (num+missing_num)==(n_tabs-4)) num=n_tabs-4;
@@ -984,7 +1008,7 @@ double log_likelihood_func(double *x, void *data){// N0,N1,N2,T
         for(i=0;i<all_s2s_global->size;i++){
             S2 *tmp=all_s2s_global->elementData[i];
             Win1 *win=all_s2s_wins_global->elementData[i];
-            int length=win->length==0 ? (win->end-win->start):win->length;
+            int length=win->length==0 ? (win->end-win->start+1):win->length;
             double rate=(double)length/(double)win_size;
             value+=get_log_poisson_probability((int)tmp->s1, s2->s1*rate);
             value+=get_log_poisson_probability((int)tmp->s2, s2->s2*rate);
@@ -1019,7 +1043,7 @@ double log_likelihood_func(double *x, void *data){// N0,N1,N2,T
 double log_likelihood_mu_func(double *x, void *data){//mu
     S2 *s2=all_s2s->elementData[(int)data];
     Win1 *win=all_s2s_wins->elementData[(int)data];
-    int length=win->length==0 ? (win->end-win->start):win->length;
+    int length=win->length==0 ? (win->end-win->start+1):win->length;
 
     S2 *tmp=my_new(1, sizeof(S2));
     tmp->dim1=s2->dim1;
@@ -1052,7 +1076,7 @@ double log_likelihood_mu_func(double *x, void *data){//mu
 double log_likelihood_mu_lambda_func(double *x, void *data){//mu lambda1 lambda2
     S2 *s2=all_s2s->elementData[(int)data];
     Win1 *win=all_s2s_wins->elementData[(int)data];
-    int length=win->length==0 ? (win->end-win->start):win->length;
+    int length=win->length==0 ? (win->end-win->start+1):win->length;
 
     S2 *tmp=my_new(1, sizeof(S2));
     tmp->dim1=s2->dim1;
@@ -1105,7 +1129,7 @@ void optimize_mu_for_win(int index){
     free(nbd);
 
     Win1 *win=all_s2s_wins->elementData[index];
-    int length=win->length==0 ? (win->end-win->start):win->length;
+    int length=win->length==0 ? (win->end-win->start+1):win->length;
     fprintf(stdout, "estimate_mu: %s-%d-%d\tmu=%f\tlike=%f\n", win->chr, win->start, win->end, res_1_mu[index]*func_mu*length, res_1_like[index]);
 }
 
@@ -1142,7 +1166,7 @@ void optimize_mu_lambda_for_win(int index){
     free(nbd);
 
     Win1 *win=all_s2s_wins->elementData[index];
-    int length=win->length==0 ? (win->end-win->start):win->length;
+    int length=win->length==0 ? (win->end-win->start+1):win->length;
     fprintf(stdout, "estimate_mu_lambda: %s-%d-%d\tmu=%f\tlambda1=%f\tlambda2=%f\tlike=%f\n", win->chr, win->start, win->end, res_2_mu[index]*func_mu*length, res_2_lambda1[index], res_2_lambda2[index], res_2_like[index]);
 }
 
