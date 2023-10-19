@@ -6,7 +6,7 @@ Zhao, S., Chi, L. & Chen, H. CEGA: a method for inferring natural selection by c
 
 
 To run CEGA, enter the following command (see CEGA v1.2 user manual for details):
-./CEGA [arguments]  
+./CEGA [arguments]
 Inputs:
 -i1	population 1 genetic variant file (.vcf .vcf.gz .tped .hap ).
 -p1	population 1 position file (format: chr position, split by tab), only required for .hap (-i1) genetic variant file.
@@ -24,7 +24,7 @@ Similar to -N0. CEGA can inter N2 from data reasonably, and it is not recommende
 Set the initial value and range of divergence time. CEGA will estimate T under these constraints. For two species of long-term divergence time, providing additional information on T can help to infer global parameters more accurately. 
 -t	(int) thread number (default: 1).
 -d	(int) filtering windows with s1+s2+s12+D < this value (default: 0).
--mu 	(double) mutation rate (default:2.5e-8). Unit: per base per generation.  
+-mu 	(double) mutation rate (default:2.5e-8). Unit: per base per generation.
 -ws	(int) window_size step_size (default: 10000 1000). Unit: bp.
 Set the window size and step size (unit: bp). The first window of each chromosome starts from the first SNP.
 -wf 	(file) window file (format: chr start (1-base, include) end (1-base, include) effective_length, split by tab), if input, '-ws' is disable (default: null).
