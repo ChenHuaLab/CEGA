@@ -4,7 +4,7 @@ We developed maximum likelihood method for detecting positive selection or balan
 If you use CEGA and publish your analysis, please cite the publication:
 Zhao, S., Chi, L. & Chen, H. CEGA: a method for inferring natural selection by comparative population genomic analysis across species. Genome Biol 24, 219 (2023). https://doi.org/10.1186/s13059-023-03068-8
 
-To run CEGA, enter the following command (see CEGA v1.2 user manual for details):
+To run CEGA, enter the following command (see CEGA v1.3 user manual for details):
 
 ./CEGA [arguments]
 
@@ -36,7 +36,7 @@ Similar to -N0. CEGA can inter N2 from data reasonably, and it is not recommende
 
 -T	(double) initial lower bound upper bound (defalut:10000.0 100.0 10000000.0).
 
-Set the initial value and range of divergence time. CEGA will estimate T under these constraints. For two species of long-term divergence time, providing additional information on T can help to infer global parameters more accurately. 
+Set the initial value and range of divergence time (Unit: generation). CEGA will estimate T under these constraints. For two species of long-term divergence time, providing additional information on T can help to infer global parameters more accurately. 
 
 -t	(int) thread number (default: 1).
 
