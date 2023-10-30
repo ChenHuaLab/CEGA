@@ -6,7 +6,7 @@
 int min_for_filter_window=0;
 double func_mu=2.5e-8;
 double max_mu=10.0;
-double min_lambda=1e-4;
+double min_lambda=1e-6;
 double max_lambda=100.0;
 double initial_N0=10000.0;
 double initial_N0_low=100.0;
@@ -433,9 +433,9 @@ void print_usage(){
     printf("Version:  1.2\n\n");
     printf("Usage: CEGA-InSel [arguments]\n");
     printf("  input:\n");
-    printf("    -i1         population1 genetic variant file(.hap .vcf .vcf.gz .tped)\n");
+    printf("    -i1         population1 data file(.hap .vcf .vcf.gz .tped)\n");
     printf("    -p1         population1 position file(format:chr position, split by tab), only for .hap(-i1), other format not need\n");
-    printf("    -i2         population2 genetic variant file(.hap .vcf .vcf.gz .tped)\n");
+    printf("    -i2         population2 data file(.hap .vcf .vcf.gz .tped)\n");
     printf("    -p2         population2 position file(format:chr position, split by tab), only for .hap(-i2), other format not need\n");
     //printf("    -afs        input afs file\n");
     printf("  options:\n");
@@ -446,14 +446,14 @@ void print_usage(){
     printf("    -t          (int)thread number(default:1)\n");
     printf("    -d          (int) filtering windows with s1+s2+s12+D < this value (default: 0)\n");
     //printf("    -L          (int)all_chrom_length.(only for -afs)\n");
-    printf("    -mu         (double)mutation rate(default:2.5e-8). Unit: per base per generation\n");
+    printf("    -mu         (double)mutation rate(default:2.5e-8)\n");
     //printf("    -op         (int)0:bfgs, 1:kmin_hj(default:0)\n");
-    printf("    -ws         (int)window_size step_size(default: 10000 1000). Unit: bp\n");
-    printf("    -wf         (file)window file(format:chr start(1-base,include) end(1-base,include) effective_length, split by tab), if input, '-ws' is disable(default:null)\n");
-    printf("    -wf_g       (file)window file to specify neutral genome region for estimating global parameters, format same to '-wf'(default:null)\n");
-    printf("    -LRT        (int)1: implement CEGA-LRT (likelihood ratio test), 0: implement CEGA-lambda(default:0)\n");
+    printf("    -ws         (int)window_size step_size(default: 10000 1000)\n");
+    printf("    -wf         (file)window file(format:chr start(1-base,include) end(1-base,include) length, split by tab), if input, '-ws' is disable(default:null)\n");
+    printf("    -wf_g       (file)window file for estimate global paras, format same to '-wf', if not input, one win for one entire chromosome(default:null)\n");
+    printf("    -LRT        (int)1: calculate LRT, 0: not(default:0)\n");
     printf("  output:\n");
-    printf("    -o          output file name\n\n");
+    printf("    -o          output file\n\n");
     exit(0);
 }
 
@@ -590,7 +590,7 @@ AList_l *read_data(){
                 if(end>max_p) end=max_p;
                 alist_l_add(list, get_S2(flag1, flag2, start, end, data1->n_sample+1, data2->n_sample+1));
                 Win1 *tmp=my_new(1, sizeof(Win1));
-                tmp->chr=data1->chrs[i];
+                tmp->chr= str_copy(data1->chrs[i]);
                 tmp->start=start;
                 tmp->end=end;
                 tmp->length=end-start+1;
@@ -651,7 +651,7 @@ AList_l *read_data(){
             //--
             alist_l_add(all_s2s_global, get_S2(flag1, flag2, start, end, data1->n_sample+1, data2->n_sample+1));
             Win1 *tmp=my_new(1, sizeof(Win1));
-            tmp->chr=data1->chrs[i];
+            tmp->chr= str_copy(data1->chrs[i]);
             tmp->start=start;
             tmp->end=end;
             tmp->length=end-start+1;
@@ -668,7 +668,31 @@ AList_l *read_data(){
         print_S2_1(global_s2);
     }
 
+    free_Pop2(data1);
+    free_Pop2(data2);
+
+    mylog("read finished!");
+
     return list;
+}
+
+void free_Pop1(Pop1 *p){
+    if(!p) return;
+    if(p->pos) free(p->pos);
+    if(p->data) free(p->data);
+    free(p);
+}
+
+void free_Pop2(Pop2 *p){
+    if(!p) return;
+    int i;
+    for(i=0;i<p->l_chr;i++){
+        free(p->chrs[i]);
+        free_Pop1(p->pops[i]);
+    }
+    free(p->chrs);
+    free(p->pops);
+    free(p);
 }
 
 Pop1 *get_pop1_by_chr(char *chr, Pop2 *data){
@@ -697,10 +721,16 @@ S2 *get_S2(int *flag1, int *flag2, int start, int end, int dim1, int dim2){
         global_s2->arr[n1*dim2+n2]++;
     }
 
+    complete_S2(s2);
+    free(s2->arr);
+    s2->arr=NULL;
+
     return s2;
 }
 
 void complete_S2(S2 *s2){
+    if(s2->arr==NULL) return;
+
     int i, j, dim1=s2->dim1, dim2=s2->dim2;
 
     s2->s1=0;

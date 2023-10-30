@@ -115,6 +115,8 @@ void print_usage();
 //----------
 Win3 *read_win_size_file(char *file);
 AList_l *read_data();
+void free_Pop1(Pop1 *p);
+void free_Pop2(Pop2 *p);
 Pop1 *get_pop1_by_chr(char *chr, Pop2 *data);
 S2 *get_S2(int *flag1, int *flag2, int start, int end, int dim1, int dim2);
 void complete_S2(S2 *s2);

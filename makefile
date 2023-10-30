@@ -1,5 +1,5 @@
-c1 = gcc -ggdb -w -O2 -mavx -mfma -D_linux
-c2 = gcc -ggdb -w -O2 -mavx -mavx2 -mfma -D_linux -D_use_bz2
+c1 = gcc -ggdb -w -O2 -D_linux
+c2 = gcc -ggdb -w -O2 -D_linux -D_use_bz2
 libs1 = -lm -lpthread -lz
 libs2 = -lm -lpthread -lz  -lbz2
 
