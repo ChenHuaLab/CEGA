@@ -1,5 +1,9 @@
-# CEGA
+# CEGA v1.3
 We developed maximum likelihood method for detecting positive selection or balancing selection using multilocus or genomic polymorphism and divergence data from two species. The method is especially useful for investigating natural selection in noncoding regions.
+
+Main changes of CEGA v1.3 compared with CEGA v1.2:
+(1) CEGA v1.3 optimizes memory usage.
+(2) CEGA v1.3 eliminates the use of Advanced Vector Extensions (AVX), making it applicable on Linux platforms that do not support AVX.
 
 If you use CEGA and publish your analysis, please cite the publication:
 Zhao, S., Chi, L. & Chen, H. CEGA: a method for inferring natural selection by comparative population genomic analysis across species. Genome Biol 24, 219 (2023). https://doi.org/10.1186/s13059-023-03068-8
