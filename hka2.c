@@ -6,7 +6,7 @@
 int min_for_filter_window=0;
 double func_mu=2.5e-8;
 double max_mu=10.0;
-double min_lambda=1e-6;
+double min_lambda=1e-4;
 double max_lambda=100.0;
 double initial_N0=10000.0;
 double initial_N0_low=100.0;
@@ -429,13 +429,13 @@ void print_usage(){
     printf("==============================\n");
     printf("Author:   ChiLianjiang\n");
     printf("E-mail:   chilianjiang@126.com\n");
-    printf("Date:     2023-06-08\n");
-    printf("Version:  1.2\n\n");
-    printf("Usage: CEGA-InSel [arguments]\n");
+    printf("Date:     2023-10-30\n");
+    printf("Version:  1.3\n\n");
+    printf("Usage: CEGA [arguments]\n");
     printf("  input:\n");
-    printf("    -i1         population1 data file(.hap .vcf .vcf.gz .tped)\n");
+    printf("    -i1         population1 genetic variant file(.hap .vcf .vcf.gz .tped)\n");
     printf("    -p1         population1 position file(format:chr position, split by tab), only for .hap(-i1), other format not need\n");
-    printf("    -i2         population2 data file(.hap .vcf .vcf.gz .tped)\n");
+    printf("    -i2         population2 genetic variant file(.hap .vcf .vcf.gz .tped)\n");
     printf("    -p2         population2 position file(format:chr position, split by tab), only for .hap(-i2), other format not need\n");
     //printf("    -afs        input afs file\n");
     printf("  options:\n");
@@ -446,14 +446,14 @@ void print_usage(){
     printf("    -t          (int)thread number(default:1)\n");
     printf("    -d          (int) filtering windows with s1+s2+s12+D < this value (default: 0)\n");
     //printf("    -L          (int)all_chrom_length.(only for -afs)\n");
-    printf("    -mu         (double)mutation rate(default:2.5e-8)\n");
+    printf("    -mu         (double)mutation rate(default:2.5e-8). Unit: per base per generation\n");
     //printf("    -op         (int)0:bfgs, 1:kmin_hj(default:0)\n");
-    printf("    -ws         (int)window_size step_size(default: 10000 1000)\n");
-    printf("    -wf         (file)window file(format:chr start(1-base,include) end(1-base,include) length, split by tab), if input, '-ws' is disable(default:null)\n");
-    printf("    -wf_g       (file)window file for estimate global paras, format same to '-wf', if not input, one win for one entire chromosome(default:null)\n");
-    printf("    -LRT        (int)1: calculate LRT, 0: not(default:0)\n");
+    printf("    -ws         (int)window_size step_size(default: 10000 1000). Unit: bp\n");
+    printf("    -wf         (file)window file(format:chr start(1-base,include) end(1-base,include) effective_length, split by tab), if input, '-ws' is disable(default:null)\n");
+    printf("    -wf_g       (file)window file to specify neutral genome region for estimating global parameters, format same to '-wf'(default:null)\n");
+    printf("    -LRT        (int)1: implement CEGA-LRT (likelihood ratio test), 0: implement CEGA-lambda(default:0)\n");
     printf("  output:\n");
-    printf("    -o          output file\n\n");
+    printf("    -o          output file name\n\n");
     exit(0);
 }
 
